@@ -1,5 +1,5 @@
 # 1 最终效果
-<img src="./Preview.png" alt="最终效果" style="width:50%;">
+<img src="./pic/Preview.png" alt="最终效果" style="width:50%;">
 
 模拟信号采集的demo， 将采集到的原始数据保存到csv，使用均值滤波处理原始数据并实时显示。
 
@@ -17,7 +17,7 @@
 如下图所示， 每次处理一帧的数据, 处理完的数据保存在 DemoBuffer 中， MainWindow绘制 QCustomplot 时， \
 会从 DemoBuffer 取处理后的数据，和记录中的数据比然后更新需要绘制到 QCustomplot 中的数据。   \
 一帧数据: 包含了32通道采集一次的数据 + 坐标的 x 轴的自增值  
-<img src="./image.png" alt="实现过程" style="width:70%;">
+<img src="./pic/image.png" alt="实现过程" style="width:70%;">
 
 ## 3.1 运行流程是：
     DemoTimer 发送 TimeOut_Sample 信号给 Sampler， 发送 TimeOut_Redraw 的信号给 MainWindow 。
