@@ -127,19 +127,7 @@ inline void DemoProcessor::GenChannelData()
     std::uniform_real_distribution<double> dis(0.0, 1.0);
     for (size_t chn = 0; chn < 32; chn++)
         for (size_t xCnt = 0; xCnt < mSampleLen; xCnt++)
-        {
-            auto val = dis(gen);
-            mSmpData[chn].push_back(val);
-        }
-
-    // srand(time(NULL));
-    // for (size_t chn = 0; chn < 32; chn++)
-    //     for (size_t xCnt = 0; xCnt < mSampleLen; xCnt++)
-    //     {
-    //         auto val = (float)rand() / RAND_MAX;
-    //         mSmpData[chn].push_back(val);
-    //         if (val > 1) qDebug() << "random val: " << val;
-    //     }
+            mSmpData[chn].push_back(dis(gen));
 }
 
 

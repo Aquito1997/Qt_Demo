@@ -63,6 +63,24 @@ void MainWindow::Init()
         this->mCustomPlots.push_back(ui->widget_3);
         this->mCustomPlots.push_back(ui->widget_4);
 
+        for (auto& plot : mCustomPlots)
+        {
+            plot->setOpenGl(true, 0);
+            plot->setAntialiasedElements(QCP::aeNone);// 禁用抗锯齿以提高性能
+            plot->setNotAntialiasedElements(QCP::aeAll);
+            qDebug() << "Opengl Status" << plot->openGl();
+
+            plot->addGraph();
+            plot->graph(0)->setPen(QPen(Qt::blue));
+            plot->graph(0)->setBrush(QBrush(QColor(0, 0, 255, 20)));
+
+            plot->xAxis2->setVisible(true);
+            plot->xAxis2->setTickLabels(false);
+            plot->yAxis2->setVisible(true);
+            plot->yAxis2->setTickLabels(false);
+            plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
+        }
+
         for (size_t iCnt = 0; iCnt < 32; iCnt++)
         {
             ui->comboBox_1->addItem(QString("Channel ") + QString::number(iCnt + 1));
@@ -77,7 +95,7 @@ void MainWindow::Init()
         ui->comboBox_4->setCurrentIndex(3);
 
         ui->lineEdit_1->setText("51200");
-        ui->lineEdit_2->setText("0.666");
+        ui->lineEdit_2->setText("0.7");
         ui->lineEdit_3->setText("10");
     }
 
@@ -90,14 +108,12 @@ void MainWindow::Init()
 
 
     {
-
-
         mChannels.push_back(0);// widget_1
         mChannels.push_back(1);// widget_2
         mChannels.push_back(2);// widget_3
         mChannels.push_back(3);// widget_4
 
-        mProcessor = new DemoProcessor(100, 51200, 0.97, 15);
+        mProcessor = new DemoProcessor(100, 51200, 0.7, 15);
         mFileSaver = new CSV_Saver(QString("./"), mProcessor->GetRowData());
 
         mFilterWinSize = CalFilterWindowSize(100, 51200);
@@ -179,9 +195,6 @@ void MainWindow::FetchFilteredData()
     QVector<channel> fltdData(33);
     mProcessor->GetFilteredData(fltdData);
     if (!fltdData[32].size()) return;
-    // qDebug() << "Filter Data Size: " << fltdData[32].size()
-    //          << "Filter Begin: " << fltdData[32].first()
-    //          << "mFltData Last: " << mFltData[32].last();
 
     // 预先计算各个通道的数据量
     QVector<int> fltChnSize;
@@ -210,37 +223,21 @@ void MainWindow::FetchFilteredData()
 // 绘制图表
 void MainWindow::Draw()
 {
-    // auto start_time = std::chrono::high_resolution_clock::now();
+    auto start_time = std::chrono::high_resolution_clock::now();
     FetchFilteredData();
     if (!mDrawPlot) return;// 绘制开关
 
-
     for (int idx = 0; idx < 4; idx++)
     {
-        auto& yfAxis = mFltData[mChannels[idx]];
         auto* plot = mCustomPlots[idx];
-        plot->replot();
-
-        plot->addGraph();
-        plot->graph(0)->setPen(QPen(Qt::blue));
-        plot->graph(0)->setBrush(QBrush(QColor(0, 0, 255, 20)));
-
-        plot->setOpenGl(true, 0);
-        plot->setAntialiasedElements(QCP::aeNone);// 禁用抗锯齿以提高性能
-        plot->setNotAntialiasedElements(QCP::aeAll);
-
-        plot->xAxis2->setVisible(true);
-        plot->xAxis2->setTickLabels(false);
-        plot->yAxis2->setVisible(true);
-        plot->yAxis2->setTickLabels(false);
-        plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
+        auto& yfAxis = mFltData[mChannels[idx]];
 
         plot->graph(0)->setData(mXAxis, yfAxis);
         plot->graph(0)->rescaleAxes();
         plot->replot();
     }
-    // auto end = std::chrono::high_resolution_clock::now();
-    // qDebug() << "usage: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
+    auto end = std::chrono::high_resolution_clock::now();
+    qDebug() << "usage: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
 }
 
 
