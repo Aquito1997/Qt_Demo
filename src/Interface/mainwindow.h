@@ -3,14 +3,12 @@
 
 
 #include "CSV_Saver.h"
-#include "DemoBuffer.h"
 #include "DemoProcessor.h"
-#include "DemoTimer.h"
-#include "Sampler.h"
 #include "qcustomplot.h"
 
 
 #include <QMainWindow>
+#include <atomic>
 #include <qaction.h>
 #include <qcontainerfwd.h>
 #include <qelapsedtimer.h>
@@ -35,7 +33,7 @@ class MainWindow : public QMainWindow
 private:
     void Init();
     void Connect();
-    void Warning();
+    void FetchFilteredData();
 
 public:
     MainWindow(QWidget* parent = nullptr);
@@ -45,20 +43,23 @@ public slots:
     void SetChannel(int viewIdx, int channelIdx);
 
 private:
-    DemoTimer* mTimer;
     CSV_Saver* mFileSaver;
-    Sampler* mSampler;
     DemoProcessor* mProcessor;
-    DemoBuffer* mBuffer;
-    std::vector<QCustomPlot*> mCustomPlots;
     QVector<std::thread*> mThreads;
+    std::vector<QCustomPlot*> mCustomPlots;
 
-    int mFilterWinSize;
-    bool mDrawPlot;
+    int mFilterWinSize;         // 根据窗口大小产生的数据量
+    std::atomic_bool mFetchData;// 线程退出开关
+    std::atomic_bool mDrawPlot; // 绘制 QCustomPlot 开关
+    std::atomic_bool mReplot;   // 绘制 QCustomPlot 开关
+
+    QTimer* mSampleTimer;// 采样定时器
+    QTimer* mReplotTimer;// 重绘定时器
 
     Ui::MainWindow* ui;
-    std::atomic<bool> mExitDraw;
+    std::atomic_bool mExitDraw;
     std::vector<int> mChannels;// widget  channel
-    QVector<channel> mFilteredData;
+    QVector<channel> mFltData; // 滤波后的函数
+    channel mXAxis;
 };
 #endif// MAINWINDOW_H

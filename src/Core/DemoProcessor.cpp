@@ -1,92 +1,177 @@
 #include "DemoProcessor.h"
+#include "basic.h"
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
+#include <qcontainerfwd.h>
 #include <qdebug.h>
 #include <qlogging.h>
+#include <qtimer.h>
 #include <qtmetamacros.h>
+#include <random>
+#include <stdlib.h>
 
-DemoProcessor::DemoProcessor(int winSize, QVector<channel>* frameRowData,
-                             QVector<channel>* frameFilterData)
-    : mWinSize(winSize), mExit(false)
+
+DemoProcessor::DemoProcessor(int drawlen, int sampleRate, float threshold, int fltWinLen)
 {
-    assert(frameRowData && frameFilterData);
-    assert(frameRowData->size() == 33);
-    assert((*frameRowData)[32].size() == 1);
-    assert(frameFilterData->size() == 33);
-    assert((*frameFilterData)[32].size() == 1);
+    mExit = false;
+    mContinue = true;
+    mThreshold = threshold;
 
-    mInFrameRowData = frameRowData;
-    mOutFilterData = frameFilterData;
+    mFltWinLen = fltWinLen;
+    mFltHalfWinLen = fltWinLen / 2;
+    mFltIdx = mFltHalfWinLen;
+
+    mDrawLen = drawlen * sampleRate / 1000;
+
+    mSample = true;
+    mSampleIdx = 0;
+    mSampleLen = 4 * sampleRate / 1000;
+
 
     for (size_t chn = 0; chn < 33; chn++)
     {
-        mRowData.push_back(channel());
-
-        mFrameRowData.push_back(channel());
-        mFrameRowData[chn].push_back(0);
-
-        mFilterData.push_back(channel());
+        mSmpData.push_back(channel());
+        mSmpData[chn].push_back(0);
+        mFltData.push_back(channel());
     }
 }
 
-void DemoProcessor::Check()
-{
-    emit Processor_Warning();
-};
 
 void DemoProcessor::Filter()
 {
     while (!mExit)
     {
-        if (mRecvFrameData)
+        if (!mContinue) continue;
+
+        EmptyRowData();// 先删除之前的数据，在生成新数据
+        GenerateData();
+
+        mMutex.lock();
         {
-            mRecvFrameData = false;
-            mInFrameRowData->swap(mFrameRowData);
+            if (mSmpData.size() < mFltWinLen) continue;
+            const int& rowDataIdx = mSmpData[32].last();
+            const int& size = mSmpData[32].size();
 
-            {                                      // 更新数据
-                if (mRowData[32].size() < mWinSize)// 填充数据
-                {
-                    for (size_t idx = 0; idx < 33; idx++)
-                        mRowData[idx].push_back(mFrameRowData[idx][0]);
-                }
-                else// 更新数据
-                {
-                    for (size_t idx = 0; idx < 33; idx++)
-                    {
-                        mRowData[idx].push_back(mFrameRowData[idx][0]);
-                        mRowData[idx].pop_front();
-                    }
-                }
-            }
-
-            if (mRowData[32].size() < mWinSize) continue;// 原始数据不够计算一次均值滤波
-
-            {// 因果滤波器
-                float filteredData = 0;
+            int xAxisIndex = mFltHalfWinLen;
+            for (; mFltIdx < rowDataIdx - mFltHalfWinLen; mFltIdx++)
+            {
                 for (size_t chn = 0; chn < 32; chn++)
                 {
-                    for (size_t idx = mRowData[32].size() - 1; idx < mWinSize; idx--)
-                        filteredData += mRowData[chn][idx];
-                    filteredData /= mWinSize;
-                    mFilterData[chn].push_back(filteredData);
-                    (*mOutFilterData)[chn][0] = filteredData;
+                    size_t cnt = 0;
+                    float filteredData = 0;
+                    size_t idx = xAxisIndex - mFltHalfWinLen;
+                    for (; cnt < mFltWinLen; cnt++)
+                    {
+                        if (idx >= size)
+                            break;
+                        filteredData += mSmpData[chn][idx];
+                        idx++;
+                    }
+                    filteredData /= cnt;
+                    mFltData[chn].push_back(filteredData);
+                    if (filteredData > mThreshold)// 峰值检测
+                        emit Processor_Warning();
                 }
-                mFilterData[32].push_back(mRowData[32].last());
-                (*mOutFilterData)[32][0] = mRowData[32].last();
-                // qDebug() << "emit DemoBuffer_FetchData ";
-                emit DemoBuffer_FetchData();
-
-                for (auto& data : mFilterData)
-                    data.pop_front();
+                mFltData[32].push_back(mSmpData[32][xAxisIndex++]);
             }
+            mContinue = false;
         }
+        mMutex.unlock();
     }
 };
 
-void DemoProcessor::RecvData()
+
+void DemoProcessor::SetDrawLen(int drawLen, int smpRate)
 {
-    mRecvFrameData = true;
+    mMutex.lock();
+    {
+        mDrawLen = drawLen * smpRate / 1000;
+    }
+    mMutex.unlock();
 }
+
+
+// 保留下次计算所需要的数据，其余部分丢弃
+void DemoProcessor::EmptyRowData()
+{
+    QVector<channel> buff(33);
+    const int& size = mSmpData[32].size();
+    for (size_t cnt = size - mFltWinLen; cnt < size - 1; cnt++)
+        for (size_t chn = 0; chn < 33; chn++)
+            buff[chn].push_back(mSmpData[chn][cnt]);
+
+    for (size_t chn = 0; chn < 33; chn++)
+        mSmpData[chn].swap(buff[chn]);
+}
+
+
+void DemoProcessor::GenerateData()
+{
+    while (!mSample);
+    GenChannelData();
+
+    const int end = mSampleIdx + mSampleLen;
+    for (; mSampleIdx < end; mSampleIdx++)
+        mSmpData[32].push_back(mSampleIdx);// 更新 xAxis 的值
+
+    emit FetchData();
+    mSample = false;
+}
+
+
+inline void DemoProcessor::GenChannelData()
+{
+    std::random_device rd; // 硬件随机数种子
+    std::mt19937 gen(rd());// 梅森旋转算法生成器
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
+    for (size_t chn = 0; chn < 32; chn++)
+        for (size_t xCnt = 0; xCnt < mSampleLen; xCnt++)
+        {
+            auto val = dis(gen);
+            mSmpData[chn].push_back(val);
+        }
+
+    // srand(time(NULL));
+    // for (size_t chn = 0; chn < 32; chn++)
+    //     for (size_t xCnt = 0; xCnt < mSampleLen; xCnt++)
+    //     {
+    //         auto val = (float)rand() / RAND_MAX;
+    //         mSmpData[chn].push_back(val);
+    //         if (val > 1) qDebug() << "random val: " << val;
+    //     }
+}
+
+
+void DemoProcessor::Sample()
+{
+    mSample = true;
+}
+
+
+void DemoProcessor::Process()
+{
+    mContinue = true;
+}
+
+
+void DemoProcessor::GetFilteredData(QVector<channel>& buffer)
+{
+    mMutex.lock();
+    {
+        buffer.swap(mFltData);
+        for (auto& chn : mFltData)
+            chn = channel();
+    }
+    mMutex.unlock();
+}
+
+
+QVector<channel>* DemoProcessor::GetRowData()
+{
+    return &this->mSmpData;
+}
+
 
 void DemoProcessor::SetThreshold(float threshold)
 {
@@ -98,9 +183,7 @@ void DemoProcessor::Exits()
     mExit = true;
 }
 
-void DemoProcessor::SetWindowSize(int winSize)
+void DemoProcessor::SetFltWinLen(int fltWinLen)
 {
-    mWinSize = winSize;
-    if (mWinSize / 2 != 0)
-        mWinSize++;
+    mFltWinLen = fltWinLen;
 }

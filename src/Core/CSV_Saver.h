@@ -24,14 +24,20 @@
 class CSV_Saver : public QObject
 {
     Q_OBJECT
+
 public:
-    void CreateFile();
-    void SaveToFile(QVector<channel>& rowData);
+signals:
+    void WriteDone();
+
+public:
+    void CreateFile(qint64 time);
+    void SaveToFile();
     void Exits();
 
+    void RecvData();
     void Pause();
     void Continue();
-    CSV_Saver(const QString& prepath);
+    CSV_Saver(const QString& prepath, QVector<channel>* rowData);
     ~CSV_Saver();
 
 private:
@@ -39,6 +45,10 @@ private:
     QString mPath;
     QString mSuffix;
     QString mFileHeader;
+
+    std::atomic_bool mRecvData;
+    QVector<channel> mRowData;
+    QVector<channel>* mData;
 
     size_t mSavedIdx;// 已经保存了的数据的条数
 

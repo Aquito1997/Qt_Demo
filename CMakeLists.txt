@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.15)
 project(HS_Demo LANGUAGES CXX)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 qt_standard_project_setup()
+
+add_subdirectory(src/ThirdParty/QCustomPlot)
 
 set(uiPath ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_autogen/include)
 include_directories(${uiPath})
@@ -28,10 +30,7 @@ qt_add_executable(HS_Demo
     src/interface/mainwindow.cpp
     src/interface/mainwindow.h
     src/interface/mainwindow.ui
-    src/Core/DemoTimer.cpp
     src/Core/CSV_Saver.cpp
-    src/Core/Sampler.cpp
-    src/Core/DemoBuffer.cpp
     src/Core/DemoProcessor.cpp
     src/ThirdParty/QCustomPlot/qcustomplot.cpp
 )

@@ -20,8 +20,37 @@
 #include <string>
 
 
-void CSV_Saver::CreateFile()
+CSV_Saver::CSV_Saver(const QString& prepath, QVector<channel>* rowData)
+    : mExit(false), mSavedIdx(0), mContinue(true), mDuration(0), mData(rowData),
+      mSuffix(".csv"), mTimeZone(QTimeZone::systemTimeZone()), mRecvData(false)
 {
+    assert(rowData);
+    QDir path(prepath);
+    mPath = path.absolutePath() + QString("/data_");
+
+    mFileHeader = QString("Index,Channel,value\n");
+    mFile = new QFile();
+    qint64 time = mDateTime->currentDateTime(mTimeZone).toSecsSinceEpoch();
+    CreateFile(time);
+
+    mDateTime = new QDateTime;
+
+    for (size_t idx = 0; idx < 33; idx++)
+        mRowData.push_back(channel());
+}
+
+
+CSV_Saver::~CSV_Saver()
+{
+    if (!mFile) delete mFile;
+    if (!mDateTime) delete mDateTime;
+}
+
+
+void CSV_Saver::CreateFile(qint64 time)
+{
+    mDuration = time;
+
     assert(mFile);
     mFile->close();
     delete mFile;
@@ -47,41 +76,54 @@ void CSV_Saver::CreateFile()
 }
 
 
-void CSV_Saver::SaveToFile(QVector<channel>& rowData)
+void CSV_Saver::SaveToFile()
 {
     while (!mExit)
     {
-        while (!mContinue);
-
         qint64 time = mDateTime->currentDateTime(mTimeZone).toSecsSinceEpoch();
-        if (time - mDuration >= 300)// 5min
+        if (time - mDuration >= 300) CreateFile(time);// 5min
+        if (!mFile->isOpen())
+            continue;
+
+        if (!mContinue)
+            continue;
+
+        if (mRecvData)
         {
-            mDuration = time;
-            CreateFile();
+            for (size_t chn = 0; chn < 33; chn++)
+                for (size_t idx = 0; idx < (*mData)[chn].size(); idx++)
+                    mRowData.push_back((*mData)[chn]);
+            emit WriteDone();
+            mRecvData = false;
         }
+        if (mRowData[32].size() < 1)
+            continue;
+        qDebug() << "mRowData size:" << mRowData[32].size();
 
-        if (!mFile->isOpen()) continue;
+        const int& xAxisStart = mRowData[32][0] > mSavedIdx ? mRowData[32].last() : mSavedIdx;
+        const int& xAxisEnd = mRowData[32].last();
+        qDebug() << "xAxisEnd: " << xAxisEnd << "\t mSavedIdx: " << mSavedIdx;
 
-        mMutex.lock();
+        int idx = 0;
+        for (size_t val = xAxisStart; val < xAxisEnd; val++)
         {
-            int loopCnt = rowData[32].size();
-            for (size_t idx = mSavedIdx; idx < loopCnt; idx++)
+            for (size_t chn = 0; chn < 33; chn++)
             {
-                for (size_t chnIdx = 0; chnIdx < 33; chnIdx++)
-                {
-                    auto& xAxis = rowData[32][idx];
-                    QString singleData = QString::number(xAxis) + ","  // 采样次数
-                        + QString::number(chnIdx) + ","                // 通道号
-                        + QString::number(rowData[chnIdx][idx]) + "\n";// 某个采样次数 下 某个通道号的 value
-                    mFile->write(singleData.toStdString().c_str());
-                }
+                QString singleData = QString::number(mRowData[32][idx]) + ","
+                    + QString::number(chn) + ","
+                    + QString::number(mRowData[chn][idx]) + "\n";
+                mFile->write(singleData.toStdString().c_str());
+                idx++;
             }
-            mSavedIdx = loopCnt;
         }
-        mMutex.unlock();
+        mSavedIdx += idx;
     }
 }
 
+void CSV_Saver::RecvData()
+{
+    mRecvData = true;
+}
 
 void CSV_Saver::Pause()
 {
@@ -96,26 +138,4 @@ void CSV_Saver::Continue()
 void CSV_Saver::Exits()
 {
     mExit = true;
-}
-
-
-CSV_Saver::CSV_Saver(const QString& prepath)
-    : mExit(false), mSavedIdx(0), mContinue(true), mDuration(0),
-      mSuffix(".csv"), mTimeZone(QTimeZone::systemTimeZone())
-{
-    QDir path(prepath);
-    mPath = path.absolutePath() + QString("/data_");
-
-    mFileHeader = QString("Index,Channel,value\n");
-    mFile = new QFile();
-    CreateFile();
-
-    mDateTime = new QDateTime;
-}
-
-
-CSV_Saver::~CSV_Saver()
-{
-    if (!mFile) delete mFile;
-    if (!mDateTime) delete mDateTime;
 }
