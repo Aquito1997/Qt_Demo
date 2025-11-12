@@ -48,7 +48,10 @@ private:
     QVector<std::thread*> mThreads;
     std::vector<QCustomPlot*> mCustomPlots;
 
-    int mFilterWinSize;         // 根据窗口大小产生的数据量
+    int mSampleRate;
+    int mPlotLen;
+    int mFilterWinSize;// 根据窗口大小产生的数据量
+
     std::atomic_bool mFetchData;// 线程退出开关
     std::atomic_bool mDrawPlot; // 绘制 QCustomPlot 开关
     std::atomic_bool mReplot;   // 绘制 QCustomPlot 开关

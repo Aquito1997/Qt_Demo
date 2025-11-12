@@ -21,7 +21,7 @@
 
 
 CSV_Saver::CSV_Saver(const QString& prepath, QVector<channel>* rowData)
-    : mExit(false), mSavedIdx(0), mContinue(true), mDuration(0), mData(rowData),
+    : mExit(false), mSavedIdx(1), mContinue(true), mDuration(0), mData(rowData),
       mSuffix(".csv"), mTimeZone(QTimeZone::systemTimeZone()), mRecvData(false)
 {
     assert(rowData);
@@ -90,23 +90,30 @@ void CSV_Saver::SaveToFile()
 
         if (mRecvData)
         {
+            QVector<size_t> vecInputSize;
+            for (int chn = 0; chn < 33; ++chn)
+                vecInputSize.push_back((*mData)[chn].size());
+
             for (size_t chn = 0; chn < 33; chn++)
-                for (size_t idx = 0; idx < (*mData)[chn].size(); idx++)
-                    mRowData.push_back((*mData)[chn]);
+                for (size_t idx = 0; idx < vecInputSize[chn] - 1; idx++)
+                {
+                    auto& val = (*mData)[chn][idx];
+                    mRowData[chn].push_back(val);
+                }
+
             emit WriteDone();
             mRecvData = false;
         }
+
         if (mRowData[32].size() < 1)
             continue;
-        qDebug() << "mRowData size:" << mRowData[32].size();
 
-        const int& xAxisStart = mRowData[32][0] > mSavedIdx ? mRowData[32].last() : mSavedIdx;
+        const int& xAxisStart = mRowData[32][0] > mSavedIdx - 1 ? mRowData[32][0] : mSavedIdx - 1;
         const int& xAxisEnd = mRowData[32].last();
-        qDebug() << "xAxisEnd: " << xAxisEnd << "\t mSavedIdx: " << mSavedIdx;
 
-        int idx = 0;
-        for (size_t val = xAxisStart; val < xAxisEnd; val++)
+        for (size_t val = xAxisStart; val < xAxisEnd - 1; val++)
         {
+            int idx = 0;
             for (size_t chn = 0; chn < 33; chn++)
             {
                 QString singleData = QString::number(mRowData[32][idx]) + ","
@@ -116,7 +123,10 @@ void CSV_Saver::SaveToFile()
                 idx++;
             }
         }
-        mSavedIdx += idx;
+        mSavedIdx += xAxisEnd - xAxisStart;
+
+        for (auto& chn : mRowData)
+            chn.clear();
     }
 }
 

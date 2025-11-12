@@ -95,6 +95,7 @@ void DemoProcessor::SetDrawLen(int drawLen, int smpRate)
 // 保留下次计算所需要的数据，其余部分丢弃
 void DemoProcessor::EmptyRowData()
 {
+    while (!mSample);
     QVector<channel> buff(33);
     const int& size = mSmpData[32].size();
     for (size_t cnt = size - mFltWinLen; cnt < size - 1; cnt++)
@@ -173,5 +174,8 @@ void DemoProcessor::Exits()
 
 void DemoProcessor::SetFltWinLen(int fltWinLen)
 {
+    mMutex.lock();
     mFltWinLen = fltWinLen;
+    mFltHalfWinLen = fltWinLen / 2;
+    mMutex.unlock();
 }

@@ -69,16 +69,6 @@ void MainWindow::Init()
             plot->setAntialiasedElements(QCP::aeNone);// 禁用抗锯齿以提高性能
             plot->setNotAntialiasedElements(QCP::aeAll);
             qDebug() << "Opengl Status" << plot->openGl();
-
-            plot->addGraph();
-            plot->graph(0)->setPen(QPen(Qt::blue));
-            plot->graph(0)->setBrush(QBrush(QColor(0, 0, 255, 20)));
-
-            plot->xAxis2->setVisible(true);
-            plot->xAxis2->setTickLabels(false);
-            plot->yAxis2->setVisible(true);
-            plot->yAxis2->setTickLabels(false);
-            plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
         }
 
         for (size_t iCnt = 0; iCnt < 32; iCnt++)
@@ -96,7 +86,10 @@ void MainWindow::Init()
 
         ui->lineEdit_1->setText("51200");
         ui->lineEdit_2->setText("0.7");
-        ui->lineEdit_3->setText("10");
+        ui->lineEdit_3->setText("15");
+
+        mSampleRate = 51200;
+        mPlotLen = 15;
     }
 
 
@@ -113,7 +106,7 @@ void MainWindow::Init()
         mChannels.push_back(2);// widget_3
         mChannels.push_back(3);// widget_4
 
-        mProcessor = new DemoProcessor(100, 51200, 0.7, 15);
+        mProcessor = new DemoProcessor(100, mSampleRate, 0.7, mPlotLen);
         mFileSaver = new CSV_Saver(QString("./"), mProcessor->GetRowData());
 
         mFilterWinSize = CalFilterWindowSize(100, 51200);
@@ -138,6 +131,14 @@ void MainWindow::Connect()
 {
     connect(mSampleTimer, &QTimer::timeout, mProcessor, &DemoProcessor::Process);
     connect(mReplotTimer, &QTimer::timeout, this, &MainWindow::Draw);
+    connect(mReplotTimer, &QTimer::timeout, this, [this]() {
+        static int cnt = 0;
+        if (cnt++ > 50)
+        {
+            cnt = 0;
+            ui->statusbar->clearMessage();
+        };
+    });
 
     connect(ui->comboBox_1, &QComboBox::currentIndexChanged, this, [this](int chnIdx) { this->SetChannel(0, chnIdx); });
     connect(ui->comboBox_2, &QComboBox::currentIndexChanged, this, [this](int chnIdx) { this->SetChannel(1, chnIdx); });
@@ -149,24 +150,37 @@ void MainWindow::Connect()
     connect(this->ui->pushButton_3, &QPushButton::pressed, this, [this]() { this->mFileSaver->Continue(); });
     connect(this->ui->pushButton_4, &QPushButton::pressed, this, [this]() { this->mFileSaver->Pause(); });
     connect(this->ui->pushButton_5, &QPushButton::pressed, this, [this]() {
-        int samRate = ui->lineEdit_1->text().toInt();      // 采样率
-        int filter = ui->lineEdit_3->text().toFloat();     // 滤波参数(ms)
-        float threshold = ui->lineEdit_2->text().toFloat();// 阈值
+        int samRate = ui->lineEdit_1->text().toInt();// 采样率
+        qDebug() << "samRate: " << samRate;
+
+        auto last = mFilterWinSize;
+        mFilterWinSize = CalFilterWindowSize(ui->lineEdit_3->text().toInt(), ui->lineEdit_1->text().toInt());
+        if (last != mFilterWinSize)
+        {
+            mXAxis = channel(mFilterWinSize);
+            std::iota(mXAxis.begin(), mXAxis.end(), 0);
+        }
 
         if (samRate > 0)
             mProcessor->SetDrawLen(100, samRate);
+    });
 
-        if (filter > 0 && samRate > 0)
-        {
-            mFilterWinSize = CalFilterWindowSize(ui->lineEdit_3->text().toInt(), ui->lineEdit_1->text().toInt());
-            mXAxis = channel(mFilterWinSize);
-            std::iota(mXAxis.begin(), mXAxis.end(), 0);
 
-            mProcessor->SetFltWinLen(mFilterWinSize);
-        }
-
+    connect(this->ui->pushButton_6, &QPushButton::pressed, this, [this]() {
+        float threshold = ui->lineEdit_2->text().toFloat();// 阈值
         if (threshold > 0)
             mProcessor->SetThreshold(threshold);
+    });
+
+
+    connect(this->ui->pushButton_7, &QPushButton::pressed, this, [this]() {
+        int filter = ui->lineEdit_3->text().toFloat();// 滤波参数(ms)
+
+        mSampleRate = 51200;
+        mPlotLen = 15;
+
+        if (filter > 0)
+            mProcessor->SetFltWinLen(mFilterWinSize);
     });
 
     connect(mProcessor, &DemoProcessor::FetchData, this, [this]() { mFileSaver->RecvData(); });
@@ -223,7 +237,6 @@ void MainWindow::FetchFilteredData()
 // 绘制图表
 void MainWindow::Draw()
 {
-    auto start_time = std::chrono::high_resolution_clock::now();
     FetchFilteredData();
     if (!mDrawPlot) return;// 绘制开关
 
@@ -232,12 +245,20 @@ void MainWindow::Draw()
         auto* plot = mCustomPlots[idx];
         auto& yfAxis = mFltData[mChannels[idx]];
 
+        plot->addGraph();
+        plot->graph(0)->setPen(QPen(Qt::blue));
+        plot->graph(0)->setBrush(QBrush(QColor(0, 0, 255, 20)));
+
+        plot->xAxis2->setVisible(true);
+        plot->xAxis2->setTickLabels(false);
+        plot->yAxis2->setVisible(true);
+        plot->yAxis2->setTickLabels(false);
+        plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
+
         plot->graph(0)->setData(mXAxis, yfAxis);
         plot->graph(0)->rescaleAxes();
         plot->replot();
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    qDebug() << "usage: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
 }
 
 
