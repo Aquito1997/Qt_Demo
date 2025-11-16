@@ -1,5 +1,6 @@
 # 最终效果
 <img src="./pic/Preview.png" alt="最终效果" style="width:50%;">
+
 使用 Qt 6.9.3 实现的一个模拟数据采集、处理的并且实时显示的 demo 。
 
 
