@@ -16,8 +16,7 @@
 
 
 # 3 实现过程：
-如下图所示， 每次采集4ms(512000 * 4 / 1000)的数据, 将采集的原始数据发送给 CSV_Saver线程，使用均值滤波处理原始数据， MainWindow将处理后的数据使用 QCustomplot 显示， \
-<img src="./pic/image.png" alt="实现过程" style="width:70%;">
+使用QTimer每4ms发送一次信号，DemoProcessor会采集(512000 * 4 / 1000)个数据, 将采集的原始数据发送给 CSV_Saver线程，使用均值滤波处理原始数据， QTimer每40ms发送一个信号给MainWindow来，将处理后的数据使用 QCustomplot 显示， \
 
 
 
